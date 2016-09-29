@@ -24,4 +24,11 @@ ds.convert_temp()
 time.sleep_ms(750)
 for rom in roms:
     print("topic "+config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode())
+    curtime=rtc.datetime()
+    _time="%04d" % curtime[0]+ \
+          "%02d" % curtime[1]+ \
+          "%02d" % curtime[2]+" "+ \
+          "%02d" % curtime[4]+ \
+          "%02d" % curtime[5]
+    print(_time)
     print(ds.read_temp(rom))

@@ -3,8 +3,8 @@ import machine
 import onewire, ds18x20
 import ujson
 import ubinascii
-#import umqtt.simple
 from umqtt.simple import MQTTClient
+import ntptime
 
 ONEWIREPIN = 5
 
@@ -34,6 +34,7 @@ print('found devices:', roms)
 #print('temperatures:', end=' ')
 ds.convert_temp()
 time.sleep_ms(750)
+ntptime.settime()
 _time=gettimestr()
 c = MQTTClient("umqtt_client", "192.168.0.106")
 c.connect()

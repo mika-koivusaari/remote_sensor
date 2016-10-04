@@ -3,10 +3,13 @@ import machine
 import onewire, ds18x20
 import ujson
 import ubinascii
+#import umqtt.simple
+from umqtt.simple import MQTTClient
 
 ONEWIREPIN = 5
 
 def gettimestr():
+    rtc=machine.RTC()
     curtime=rtc.datetime()
     _time="%04d" % curtime[0]+ \
           "%02d" % curtime[1]+ \
@@ -32,7 +35,15 @@ print('found devices:', roms)
 ds.convert_temp()
 time.sleep_ms(750)
 _time=gettimestr()
+c = MQTTClient("umqtt_client", "192.168.0.106")
+c.connect()
+
 for rom in roms:
     print("topic "+config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode())
+    topic=config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode()
     print(_time)
     print(ds.read_temp(rom))
+    message=_time+' '+str(ds.read_temp(rom))
+    c.publish(topic,message)
+
+c.disconnect()

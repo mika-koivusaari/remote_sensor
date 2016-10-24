@@ -1,2 +1,3 @@
 { "MQTT_BROKER": "192.168.0.106"
-, "MQTT_TOPIC": "/house/temperatures/1wire/"}
+, "MQTT_TOPIC": "/house/temperatures/1wire/"
+, "MEASURE_VOLTAGE": "false"}

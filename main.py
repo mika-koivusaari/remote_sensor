@@ -11,11 +11,7 @@ ONEWIREPIN = 5
 def gettimestr():
     rtc=machine.RTC()
     curtime=rtc.datetime()
-    _time="%04d" % curtime[0]+ \
-          "%02d" % curtime[1]+ \
-          "%02d" % curtime[2]+" "+ \
-          "%02d" % curtime[4]+ \
-          "%02d" % curtime[5]
+    _time="%04d" % curtime[0]+ "%02d" % curtime[1]+ "%02d" % curtime[2]+" "+ "%02d" % curtime[4]+ "%02d" % curtime[5]
     return _time
 
 f = open('config.json', 'r')
@@ -36,9 +32,19 @@ ds.convert_temp()
 time.sleep_ms(750)
 ntptime.settime()
 _time=gettimestr()
-c = MQTTClient("umqtt_client", "192.168.0.106")
+c = MQTTClient("umqtt_client", config['MQTT_BROKER'])
 c.connect()
 
+#check battery voltage?
+if (config['MEASURE_VOLTAGE']=="true"):
+    adc = machine.ADC(0)
+    voltage = adc.read();
+    topic="/hardware/"+machine.unique_id().decode()+"/voltage/"
+    message=_time+" "+str(voltage)
+    c.publish(topic,message)
+    
+
+#loop ds18b20 and send results to mqtt broker
 for rom in roms:
     print("topic "+config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode())
     topic=config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode()

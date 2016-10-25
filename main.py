@@ -1,5 +1,6 @@
 import time
 import machine
+import network
 import onewire, ds18x20
 import ujson
 import ubinascii
@@ -18,12 +19,12 @@ if stoppin.value()==0:
     print("Pin down, stop")
 else:
     #normal loop
-    ONEWIREPIN = 5
 
     f = open('config.json', 'r')
     config = ujson.loads(f.readall())
 
     # the device is on GPIOxx
+    ONEWIREPIN = config['ONEWIREPIN']
     dat = machine.Pin(ONEWIREPIN)
 
     # create the onewire object
@@ -37,13 +38,19 @@ else:
     ds.convert_temp()
     time.sleep_ms(750)
 
+    # Check if we have wifi, and wait for connection if not.
+    wifi = network.WLAN(network.STA_IF)
+    while not wifi.isconnected():
+        print(".")
+        time.sleep(1)
+
     ntptime.settime()
     _time=gettimestr()
     c = MQTTClient("umqtt_client", config['MQTT_BROKER'])
     c.connect()
 
     #check battery voltage?
-    if (config['MEASURE_VOLTAGE']=="true"):
+    if (config['MEASURE_VOLTAGE']):
         adc = machine.ADC(0)
         voltage = adc.read();
         topic="/hardware/"+machine.unique_id().decode()+"/voltage/"

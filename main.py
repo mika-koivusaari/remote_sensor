@@ -7,6 +7,9 @@ import ubinascii
 from umqtt.simple import MQTTClient
 import ntptime
 
+class Exit(Exception):
+    pass
+    
 def gettimestr():
     rtc=machine.RTC()
     curtime=rtc.datetime()
@@ -18,52 +21,72 @@ stoppin = machine.Pin(4,mode=machine.Pin.IN,pull=machine.Pin.PULL_UP)
 if stoppin.value()==0:
     print("Pin down, stop")
 else:
-    #normal loop
+    try:
+        #normal loop
 
-    f = open('config.json', 'r')
-    config = ujson.loads(f.readall())
+        f = open('config.json', 'r')
+        config = ujson.loads(f.readall())
 
-    # the device is on GPIOxx
-    ONEWIREPIN = config['ONEWIREPIN']
-    dat = machine.Pin(ONEWIREPIN)
+        # the device is on GPIOxx
+        ONEWIREPIN = config['ONEWIREPIN']
+        dat = machine.Pin(ONEWIREPIN)
 
-    # create the onewire object
-    ds = ds18x20.DS18X20(onewire.OneWire(dat))
+        # create the onewire object
+        ds = ds18x20.DS18X20(onewire.OneWire(dat))
 
-    # scan for devices on the bus
-    roms = ds.scan()
-    print('found devices:', roms)
+        # scan for devices on the bus
+        roms = ds.scan()
+        print('found devices:', roms)
 
-    #print('temperatures:', end=' ')
-    ds.convert_temp()
-    time.sleep_ms(750)
+        #print('temperatures:', end=' ')
+        ds.convert_temp()
+        time.sleep_ms(750)
 
-    # Check if we have wifi, and wait for connection if not.
-    wifi = network.WLAN(network.STA_IF)
-    while not wifi.isconnected():
-        print(".")
-        time.sleep(1)
+        # Check if we have wifi, and wait for connection if not.
+        wifi = network.WLAN(network.STA_IF)
+        i = 0
+        while not wifi.isconnected():
+            if (i>10):
+                print("No wifi connection.")
+                raise Exit
+            print(".")
+            time.sleep(1)
+            i=i+1
 
-    ntptime.settime()
-    _time=gettimestr()
-    c = MQTTClient("umqtt_client", config['MQTT_BROKER'])
-    c.connect()
+        ntptime.settime()
+        _time=gettimestr()
+        c = MQTTClient("umqtt_client", config['MQTT_BROKER'])
+        c.connect()
 
-    #check battery voltage?
-    if (config['MEASURE_VOLTAGE']):
-        adc = machine.ADC(0)
-        voltage = adc.read();
-        topic="/hardware/"+machine.unique_id().decode()+"/voltage/"
-        message=_time+" "+str(voltage)
-        c.publish(topic,message)
+        #check battery voltage?
+        if (config['MEASURE_VOLTAGE']):
+            adc = machine.ADC(0)
+            voltage = adc.read();
+            topic="/hardware/"+machine.unique_id().decode()+"/voltage/"
+            message=_time+" "+str(voltage)
+            c.publish(topic,message)
 
-    #loop ds18b20 and send results to mqtt broker
-    for rom in roms:
-        print("topic "+config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode())
-        topic=config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode()
-        print(_time)
-        print(ds.read_temp(rom))
-        message=_time+' '+str(ds.read_temp(rom))
-        c.publish(topic,message)
+        #loop ds18b20 and send results to mqtt broker
+        for rom in roms:
+            print("topic "+config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode())
+            topic=config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode()
+            print(_time)
+            print(ds.read_temp(rom))
+            message=_time+' '+str(ds.read_temp(rom))
+            c.publish(topic,message)
 
-    c.disconnect()
+        c.disconnect()
+
+    except Exit:
+        pass
+    finally:
+        # configure RTC.ALARM0 to be able to wake the device
+        rtc = machine.RTC()
+        rtc.irq(trigger=rtc.ALARM0, wake=machine.DEEPSLEEP)
+
+        # set RTC.ALARM0 to fire after 60 seconds (waking the device)
+        rtc.alarm(rtc.ALARM0, 60000)
+
+        # put the device to sleep
+        machine.deepsleep()
+    

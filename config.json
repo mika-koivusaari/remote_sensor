@@ -1,4 +1,4 @@
 { "MQTT_BROKER": "192.168.0.106"
 , "MQTT_TOPIC": "/house/temperatures/1wire/"
-, "MEASURE_VOLTAGE": false
+, "MEASURE_VOLTAGE": true
 , "ONEWIREPIN": 5}

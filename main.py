@@ -7,7 +7,15 @@ import ubinascii
 from umqtt.simple import MQTTClient
 import ntptime
 
-class Exit(Exception):
+#Thrown if an error that is fatal occurs,
+#stop measurement cycle.
+class Error(Exception):
+    pass
+
+#Thrown if an error that is not fatal occurs,
+#goes to deep sleep and continues as normal.
+#For example no wifi connection at this time.
+class Warning(Exception):
     pass
     
 def gettimestr():
@@ -15,6 +23,17 @@ def gettimestr():
     curtime=rtc.datetime()
     _time="%04d" % curtime[0]+ "%02d" % curtime[1]+ "%02d" % curtime[2]+" "+ "%02d" % curtime[4]+ "%02d" % curtime[5]
     return _time
+
+def deepsleep():
+    # configure RTC.ALARM0 to be able to wake the device
+    rtc = machine.RTC()
+    rtc.irq(trigger=rtc.ALARM0, wake=machine.DEEPSLEEP)
+
+    # set RTC.ALARM0 to fire after 60 seconds (waking the device)
+    rtc.alarm(rtc.ALARM0, 60000)
+
+    # put the device to sleep
+    machine.deepsleep()
 
 #check if gpio4 is pulled down
 stoppin = machine.Pin(4,mode=machine.Pin.IN,pull=machine.Pin.PULL_UP)
@@ -24,8 +43,12 @@ else:
     try:
         #normal loop
 
-        f = open('config.json', 'r')
-        config = ujson.loads(f.readall())
+        try:
+            f = open('config.json', 'r')
+            config = ujson.loads(f.readall())
+        except IOError as e:
+            print("I/O error({0}): {1}".format(e.errno, e.strerror))
+            raise Error
 
         # the device is on GPIOxx
         ONEWIREPIN = config['ONEWIREPIN']
@@ -37,24 +60,27 @@ else:
         # scan for devices on the bus
         roms = ds.scan()
         print('found devices:', roms)
-
-        #print('temperatures:', end=' ')
-        ds.convert_temp()
-        time.sleep_ms(750)
+        if (len(roms)>0):
+            ds.convert_temp()
+            time.sleep_ms(750)
 
         # Check if we have wifi, and wait for connection if not.
+        print("Check wifi connection.")
         wifi = network.WLAN(network.STA_IF)
         i = 0
         while not wifi.isconnected():
             if (i>10):
                 print("No wifi connection.")
-                raise Exit
+                raise Warning
             print(".")
             time.sleep(1)
             i=i+1
 
+        print("Get time.")
         ntptime.settime()
         _time=gettimestr()
+
+        print("Open MQTT connection.")
         c = MQTTClient("umqtt_client", config['MQTT_BROKER'])
         c.connect()
 
@@ -62,7 +88,7 @@ else:
         if (config['MEASURE_VOLTAGE']):
             adc = machine.ADC(0)
             voltage = adc.read();
-            topic="/hardware/"+machine.unique_id().decode()+"/voltage/"
+            topic="/hardware/"+ubinascii.hexlify(machine.unique_id()).decode()+"/voltage/"
             message=_time+" "+str(voltage)
             c.publish(topic,message)
 
@@ -77,16 +103,9 @@ else:
 
         c.disconnect()
 
-    except Exit:
-        pass
-    finally:
-        # configure RTC.ALARM0 to be able to wake the device
-        rtc = machine.RTC()
-        rtc.irq(trigger=rtc.ALARM0, wake=machine.DEEPSLEEP)
-
-        # set RTC.ALARM0 to fire after 60 seconds (waking the device)
-        rtc.alarm(rtc.ALARM0, 60000)
-
-        # put the device to sleep
-        machine.deepsleep()
+        deepsleep()
+    except Warning:
+        deepsleep()
+    except Error:
+        print("Error({0}): {1}".format(e.errno, e.strerror))
     

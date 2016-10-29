@@ -6,6 +6,7 @@ import ujson
 import ubinascii
 from umqtt.simple import MQTTClient
 import ntptime
+import errno
 
 #Thrown if an error that is fatal occurs,
 #stop measurement cycle.
@@ -46,9 +47,10 @@ else:
         try:
             f = open('config.json', 'r')
             config = ujson.loads(f.readall())
-        except IOError as e:
-            print("I/O error({0}): {1}".format(e.errno, e.strerror))
-            raise Error
+        except OSError as e:
+            if e.args[0] == errno.MP_ENOENT or e.args[0] == errno.MP_EIO:
+                print("I/O error({0}): {1}".format(e.args[0], e.args[1]))
+                raise Error
 
         # the device is on GPIOxx
         ONEWIREPIN = config['ONEWIREPIN']
@@ -76,9 +78,26 @@ else:
             time.sleep(1)
             i=i+1
 
-        print("Get time.")
-        ntptime.settime()
+        try:
+            print("Get time.")
+            ntptime.settime()
+        except OSError as e:
+            if e.args[0] == errno.ETIMEDOUT: #OSError: [Errno 110] ETIMEDOUT
+                print("Timeout error, didn't get ntptime.")
+                #if we did not wake up from deep sleep
+                #we cannot continue until we get correct time
+                if (machine.reset_cause()!=machine.DEEPSLEEP):
+                    raise Warning
+            if e.args[0] == -2: #OSError: dns error
+                print("DNS error, didn't get ntptime.")
+                #if we did not wake up from deep sleep
+                #we cannot continue until we get correct time
+                if (machine.reset_cause()!=machine.DEEPSLEEP):
+                    raise Warning
+            else:
+                raise
         _time=gettimestr()
+                
 
         print("Open MQTT connection.")
         c = MQTTClient("umqtt_client", config['MQTT_BROKER'])
@@ -107,5 +126,5 @@ else:
     except Warning:
         deepsleep()
     except Error:
-        print("Error({0}): {1}".format(e.errno, e.strerror))
+        print("Error({0}): {1}".format(e.args[0], e.args[1]))
     

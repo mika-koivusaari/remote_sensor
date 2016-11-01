@@ -1,5 +1,6 @@
 import time
 import machine
+from machine import Timer
 import network
 import onewire, ds18x20
 import ujson
@@ -36,6 +37,16 @@ def deepsleep():
     # put the device to sleep
     machine.deepsleep()
 
+timer_index=20
+
+def timercallback(tim):
+    global timer_index
+    if timer_index==0:
+        print("Timer reached 0, something went wrong -> sleep.")
+        deepsleep()
+    print("Timer index "+str(timer_index))
+    timer_index=timer_index-1
+    
 #check if gpio4 is pulled down
 stoppin = machine.Pin(4,mode=machine.Pin.IN,pull=machine.Pin.PULL_UP)
 if stoppin.value()==0:
@@ -43,6 +54,9 @@ if stoppin.value()==0:
 else:
     try:
         #normal loop
+
+        tim = Timer(-1)
+        tim.init(period=1000, mode=Timer.PERIODIC, callback=timercallback)
 
         try:
             f = open('config.json', 'r')

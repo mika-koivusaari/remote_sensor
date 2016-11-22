@@ -121,14 +121,14 @@ else:
         if (config['MEASURE_VOLTAGE']):
             adc = machine.ADC(0)
             voltage = adc.read();
-            topic="/hardware/"+ubinascii.hexlify(machine.unique_id()).decode()+"/voltage/"
+            topic="raw/esp8266/"+ubinascii.hexlify(machine.unique_id()).decode()+"/voltage"
             message=_time+" "+str(voltage)
             c.publish(topic,message)
 
         #loop ds18b20 and send results to mqtt broker
         for rom in roms:
             print("topic "+config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode())
-            topic=config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode()
+            topic=config['MQTT_TOPIC']+ubinascii.hexlify(rom).decode()+"/temperature"
             print(_time)
             print(ds.read_temp(rom))
             message=_time+' '+str(ds.read_temp(rom))
